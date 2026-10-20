@@ -1,0 +1,17 @@
+name: Automatic publication safety gate
+on:
+  push:
+    branches: [feature/automatic-publication-policy]
+  pull_request:
+    paths: ['server/automaticPublicationPolicy.ts', 'server/assessStagedUpload.ts', 'tests/**', 'package.json', '.github/workflows/automatic-publication.yml']
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - run: npm run build
