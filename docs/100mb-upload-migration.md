@@ -45,3 +45,10 @@ Status: **PRIVATE MULTIPART + METADATA INSPECTION IMPLEMENTED / PUBLICATION NOT 
 - Fixed the missing `/complete` route in the multipart upload API.
 - These checks are **not** a substitute for decompression, CRC verification, or a security review. Large uploads remain private and are not published.
 - Still needed: bounded streaming extraction, per-file CRC validation, lifecycle cleanup, end-to-end tests and UI rollout.
+
+## Phase 4: per-entry content verification helper (not yet connected)
+
+- Added `server/largeZipEntryVerification.ts` to read one compressed entry in 256 KiB R2 ranges, incrementally inflate DEFLATE entries, and check the actual output size and CRC32.
+- Current helper deliberately caps each uncompressed entry at 16 MiB; it buffers one entry before returning it. It is **not** a completed 100 MiB streaming extractor.
+- Before connecting to moderation, implement incremental staging to R2 without buffering large outputs, avoid repeated full-directory inspection for each entry, and add tests for CRC corruption, truncated deflate, memory pressure, and incomplete uploads.
+- No changes to existing 10 MiB user-facing upload limit or approval rules.
