@@ -19,7 +19,7 @@ const inspection=await inspectLargeZip(env.GAME_UPLOADS,row.object_key);
 if(!inspection.ok)throw Error(inspection.error);
 if(inspection.entries.length>MAX_FILES||inspection.entries.some(e=>e.uncompressed>MAX_ENTRY))throw Error('現段階の検証上限（100ファイル・各16MiB）を超えています');
 for(const entry of inspection.entries){
-const checked=await verifyLargeZipEntry(env.GAME_UPLOADS,row.object_key,entry.name);
+const checked=await verifyLargeZipEntry(env.GAME_UPLOADS,row.object_key,entry.name,entry);
 if(!checked.ok)throw Error(checked.error);
 const ext=entry.name.split('.').pop()?.toLowerCase()||'';
 const key=prefix+'files/'+entry.name;
