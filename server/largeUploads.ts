@@ -4,7 +4,7 @@ import {inspectLargeZip} from './largeZipInspection';
 type Env={DB:D1Database;GAME_UPLOADS:R2Bucket};
 type User={id:string;username:string;email:string};
 type Session={id:string;user_id:string;object_key:string;upload_id:string;expected_size:number;expires_at:number;state:string};
-const MAX=100*1024*1024,PART=5*1024*1024,TTL=60*60;
+const MAX=100*1024*1024,PART=5*1024*1024,TTL=60*60;const MAX_SESSIONS=2;
 const reply=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
 export async function handleLargeUpload(req:Request,env:Env,user:User|null):Promise<Response>{
 if(!user)return reply({error:'ログインが必要です'},401);
@@ -16,7 +16,7 @@ let body:unknown;try{body=await req.json()}catch{return reply({error:'Invalid JS
 const size=typeof body==='object'&&body!==null&&'size' in body?(body as {size:unknown}).size:null;
 if(typeof size!=='number'||!Number.isSafeInteger(size)||size<22||size>MAX)return reply({error:'ZIPは100MiB以下にしてください'},400);
 const active=await env.DB.prepare("SELECT COUNT(*) AS n FROM large_upload_sessions WHERE user_id=? AND state='uploading' AND expires_at>?").bind(user.id,now).first<{n:number}>();
-if((active?.n||0)>=2)return reply({error:'同時アップロードは2件までです'},429);
+if((active?.n||0)>=MAX_SESSIONS)return reply({error:'同時アップロードは2件までです'},429);
 const id=crypto.randomUUID(),key='unverified/'+user.id+'/'+id+'.zip';
 const upload=await env.GAME_UPLOADS.createMultipartUpload(key,{httpMetadata:{contentType:'application/zip'}});
 try{await env.DB.prepare('INSERT INTO large_upload_sessions(id,user_id,object_key,upload_id,expected_size,created_at,expires_at,state) VALUES(?,?,?,?,?,?,?,?)').bind(id,user.id,key,upload.uploadId,size,now,now+TTL,'uploading').run()}catch(e){await upload.abort().catch(()=>{});throw e}
@@ -41,14 +41,16 @@ const parts=typeof body==='object'&&body!==null&&'parts' in body?(body as {parts
 const expectedParts=Math.ceil(row.expected_size/PART);
 if(!Array.isArray(parts)||parts.length!==expectedParts||parts.some((p,i)=>!p||typeof p!=='object'||p.partNumber!==i+1||typeof p.etag!=='string'||p.etag.length<1||p.etag.length>200))return reply({error:'アップロードパート情報が不正です'},400);
 try{
+const locked=await env.DB.prepare("UPDATE large_upload_sessions SET state='finalizing' WHERE id=? AND user_id=? AND state='uploading' AND expires_at>?").bind(row.id,user.id,now).run();
+if(locked.meta.changes!==1)return reply({error:'アップロードは処理中または終了しています'},409);
 await upload.complete(parts as R2UploadedPart[]);
 const object=await env.GAME_UPLOADS.head(row.object_key);
 if(!object||object.size!==row.expected_size){await env.DB.prepare("UPDATE large_upload_sessions SET state='rejected' WHERE id=?").bind(row.id).run();await env.GAME_UPLOADS.delete(row.object_key).catch(()=>{});return reply({error:'アップロードサイズが一致しません'},400)}
 const inspection=await inspectLargeZip(env.GAME_UPLOADS,row.object_key);
 if(!inspection.ok){await env.DB.prepare("UPDATE large_upload_sessions SET state='rejected' WHERE id=?").bind(row.id).run();await env.GAME_UPLOADS.delete(row.object_key).catch(()=>{});return reply({error:inspection.error},400)}
-await env.DB.prepare("UPDATE large_upload_sessions SET state='inspected' WHERE id=? AND state='uploading'").bind(row.id).run();
+await env.DB.prepare("UPDATE large_upload_sessions SET state='inspected' WHERE id=? AND state='finalizing'").bind(row.id).run();
 return reply({ok:true,status:'inspected_private',files:inspection.entries.length,expandedBytes:inspection.expandedBytes,message:'メタデータ検査のみ完了。ゲームとしての投稿・公開はまだできません'});
-}catch(e){console.error('large_upload.complete_failed',e);return reply({error:'アップロード完了処理に失敗しました'},500)}
+ }catch(e){console.error('large_upload.complete_failed',e);await env.DB.prepare("UPDATE large_upload_sessions SET state='failed' WHERE id=? AND state='finalizing'").bind(row.id).run().catch(()=>{});return reply({error:'アップロード完了処理に失敗しました。新しいアップロードを開始してください'},500)}
 }
 if(match[2]&&req.method==='PUT'){
 const number=Number(match[2]),parts=Math.ceil(row.expected_size/PART);
