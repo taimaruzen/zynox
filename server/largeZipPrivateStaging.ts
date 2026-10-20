@@ -10,10 +10,11 @@ const MAX_FILES=100,MAX_ENTRY=16*1024*1024,MAX_TOTAL=128*1024*1024;
 /** Private staging prototype. Never creates an approved game or public manifest. */
 export async function stageInspectedUpload(env:Env,sessionId:string){
 const row=await env.DB.prepare("SELECT id,user_id,object_key,state FROM large_upload_sessions WHERE id=?").bind(sessionId).first<Session>();
-if(!row||row.state!=='inspected')return {ok:false,status:409,error:'検査済みアップロードがありません'};
-const claim=await env.DB.prepare("UPDATE large_upload_sessions SET state='staging' WHERE id=? AND state='inspected'").bind(sessionId).run();
+if(!row||!['inspected','registered_private'].includes(row.state))return {ok:false,status:409,error:'検査済みアップロードがありません'};
+const claim=await env.DB.prepare("UPDATE large_upload_sessions SET state='staging' WHERE id=? AND state IN ('inspected','registered_private')").bind(sessionId).run();
 if(claim.meta.changes!==1)return {ok:false,status:409,error:'別の処理が進行中です'};
 const prefix='private-validation/'+row.id+'/';
+const priorState=row.state;
 const written:string[]=[];
 try{
 const inspection=await inspectLargeZip(env.GAME_UPLOADS,row.object_key);
@@ -33,7 +34,7 @@ return {ok:true,status:200,files:manifest.files.length,visibility:'private',publ
 }catch(e){
 console.error('large_zip.private_staging_failed',e);
 await Promise.allSettled(written.map(key=>env.GAME_UPLOADS.delete(key)));
-await env.DB.prepare("UPDATE large_upload_sessions SET state='inspected' WHERE id=? AND state='staging'").bind(row.id).run().catch(()=>{});
+await env.DB.prepare("UPDATE large_upload_sessions SET state=? WHERE id=? AND state='staging'").bind(priorState,row.id).run().catch(()=>{});
 return {ok:false,status:422,error:e instanceof Error?e.message:'ZIP検証に失敗しました'};
 }
 }
