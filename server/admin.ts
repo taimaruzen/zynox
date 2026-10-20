@@ -1,3 +1,4 @@
+import {stageInspectedUpload} from './largeZipPrivateStaging';
 import {prepareGame} from './prepareGame';
 type Env={DB:D1Database;GAME_UPLOADS:R2Bucket};
 type User={id:string;username:string;email:string};
@@ -8,6 +9,11 @@ const admin=await env.DB.prepare('SELECT user_id FROM admin_users WHERE user_id=
 if(!admin)return reply({error:'管理者権限がありません'},403);
 const path=new URL(req.url).pathname;
 if(path==='/api/admin/me'&&req.method==='GET')return reply({admin:true});
+const privateStage=path.match(/^\/api\/admin\/large-uploads\/([a-f0-9-]{36})\/stage-private$/);
+if(privateStage&&req.method==='POST'){
+if(req.headers.get('origin')!==new URL(req.url).origin)return reply({error:'Invalid origin'},403);
+const result=await stageInspectedUpload(env,privateStage[1]);return reply(result,result.status);
+}
 if(path==='/api/admin/games'&&req.method==='GET'){const result=await env.DB.prepare("SELECT g.id,g.title,g.description,g.category,g.status,g.created_at,g.zip_size,u.username FROM games g JOIN users u ON g.owner_id=u.id WHERE g.status='pending' ORDER BY g.created_at ASC LIMIT 100").all();return reply({games:result.results})}
 const download=path.match(/^\/api\/admin\/games\/([a-f0-9-]{36})\/download$/);
 if(download&&req.method==='GET'){const game=await env.DB.prepare('SELECT zip_key,title FROM games WHERE id=?').bind(download[1]).first<{zip_key:string;title:string}>();if(!game)return reply({error:'ゲームが見つかりません'},404);const object=await env.GAME_UPLOADS.get(game.zip_key);if(!object)return reply({error:'ZIPが見つかりません'},404);return new Response(object.body,{headers:{'content-type':'application/zip','content-disposition':'attachment; filename="game-review.zip"','cache-control':'no-store','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; sandbox"}})}
