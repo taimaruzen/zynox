@@ -5,7 +5,7 @@ export async function handleFavorites(req:Request,env:Env,user:User|null):Promis
 if(!user)return json({error:'ログインが必要です'},401);
 const path=new URL(req.url).pathname;
 if(path==='/api/favorites'&&req.method==='GET'){
-const result=await env.DB.prepare("SELECT g.id,g.title,g.description,g.category,g.created_at,u.username,CASE WHEN g.thumbnail_key IS NOT NULL THEN 1 ELSE 0 END AS has_thumbnail,(SELECT COUNT(*) FROM play_sessions p WHERE p.game_id=g.id) AS play_count FROM game_favorites f JOIN games g ON g.id=f.game_id JOIN users u ON u.id=g.owner_id WHERE f.user_id=? AND g.status='approved' ORDER BY f.created_at DESC LIMIT 100").bind(user.id).all();
+const result=await env.DB.prepare("SELECT g.id,g.title,g.description,g.category,g.created_at,g.orientation,u.username,CASE WHEN g.thumbnail_key IS NOT NULL THEN 1 ELSE 0 END AS has_thumbnail,(SELECT COUNT(*) FROM play_sessions p WHERE p.game_id=g.id) AS play_count FROM game_favorites f JOIN games g ON g.id=f.game_id JOIN users u ON u.id=g.owner_id WHERE f.user_id=? AND g.status='approved' ORDER BY f.created_at DESC LIMIT 100").bind(user.id).all();
 return json({games:result.results});
 }
 const match=path.match(/^\/api\/favorites\/([a-f0-9-]{36})$/);
