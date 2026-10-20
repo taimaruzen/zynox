@@ -1,7 +1,7 @@
 import{useEffect,useRef,useState}from'react';
-import{ArrowLeft,Gamepad2,ShieldCheck,Maximize2,Minimize2,MonitorPlay,Coins}from'lucide-react';
+import{ArrowLeft,Gamepad2,ShieldCheck,Maximize2,Minimize2,MonitorPlay,Coins,Heart}from'lucide-react';
 export type PublicGame={id:string;title:string;description:string;category:string;username:string;created_at:string;play_count:number;has_thumbnail:number};
-export default function GameDetailPage({game,onBack}:{game:PublicGame;onBack:()=>void}){
+export default function GameDetailPage({game,onBack,favorite,onToggleFavorite}:{game:PublicGame;onBack:()=>void;favorite:boolean;onToggleFavorite:()=>void}){
 const runtime='https://zynox-game-runtime.tainosuke79.workers.dev';
 const[session,setSession]=useState<string|null>(null),[message,setMessage]=useState('');const[playing,setPlaying]=useState(false);
 const started=useRef(false);const finishBusy=useRef(false);const sessionStartedAt=useRef(0);
@@ -18,7 +18,7 @@ async function finish(){if(!session||!playing||finishBusy.current)return;finishB
 useEffect(()=>{if(!session||!playing)return;const attempt=()=>{if(document.visibilityState==='visible'&&Date.now()-sessionStartedAt.current>=31000)void finish()};const timer=setInterval(attempt,3000);document.addEventListener('visibilitychange',attempt);attempt();return()=>{clearInterval(timer);document.removeEventListener('visibilitychange',attempt)}},[session,playing,game.id]);
 return <main className="mx-auto max-w-7xl px-4 sm:px-6 py-7 sm:py-10 text-white">
 <button onClick={onBack} className="mb-7 flex items-center gap-2 text-sm text-neutral-400 hover:text-white"><ArrowLeft size={18}/> ゲーム一覧へ戻る</button>
-<div className="mb-6 flex flex-wrap items-start justify-between gap-4"><div><p className="mb-2 text-xs font-medium tracking-widest text-indigo-300">{game.category.toUpperCase()}</p><h1 className="text-3xl sm:text-4xl font-bold tracking-tight">{game.title}</h1><p className="mt-3 text-sm text-neutral-400">制作 @{game.username}</p></div><span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300"><ShieldCheck size={16}/> 公開済み</span></div>
+<div className="mb-6 flex flex-wrap items-start justify-between gap-4"><div><p className="mb-2 text-xs font-medium tracking-widest text-indigo-300">{game.category.toUpperCase()}</p><h1 className="text-3xl sm:text-4xl font-bold tracking-tight">{game.title}</h1><p className="mt-3 text-sm text-neutral-400">制作 @{game.username}</p></div><div className="flex flex-wrap items-center gap-2"><span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300"><ShieldCheck size={16}/> 公開済み</span><button type="button" onClick={onToggleFavorite} className="inline-flex items-center gap-2 rounded-lg bg-[#303030] px-4 py-2 text-sm hover:bg-[#404040]"><Heart size={17} fill={favorite?"#818cf8":"none"} className={favorite?"text-indigo-300":"text-neutral-300"}/>{favorite?"お気に入り済み":"お気に入りに追加"}</button></div></div>
 <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
 <div className="min-w-0">
 <div ref={playerRef} className={mobileFullscreen?"fixed inset-0 z-[100] flex flex-col bg-black overflow-hidden":"overflow-hidden rounded-xl border border-white/10 bg-[#0c0c12] fullscreen:flex fullscreen:items-center fullscreen:justify-center fullscreen:bg-black"}>
