@@ -14,7 +14,9 @@ export async function assessStagedUpload(env:Env,sessionId:string,ownerId:string
 const row=await env.DB.prepare('SELECT id,user_id,state FROM large_upload_sessions WHERE id=? AND user_id=?')
 .bind(sessionId,ownerId).first<Session>();
 if(!row)return {ok:false,status:404,error:'アップロードが見つかりません'} as const;
-const manifestObject=await env.GAME_UPLOADS.get('private-validation/'+sessionId+'/manifest.json');
+const game=await env.DB.prepare("SELECT id FROM games WHERE owner_id=? AND zip_key=(SELECT object_key FROM large_upload_sessions WHERE id=?) AND status='pending' LIMIT 1").bind(ownerId,sessionId).first<{id:string}>();
+const prefix=game?'staged/'+game.id+'/':'private-validation/'+sessionId+'/';
+const manifestObject=await env.GAME_UPLOADS.get(prefix+'manifest.json');
 let manifest:PrivateManifest|null=null;
 if(manifestObject){try{manifest=await manifestObject.json() as PrivateManifest}catch{}}
 const files=Array.isArray(manifest?.files)&&manifest.files.length>0&&manifest.files.length<=100
@@ -23,7 +25,7 @@ let assetsPresent=false;
 if(files&&row.state==='staged_private'&&manifest?.uploadSessionId===sessionId){
 assetsPresent=true;
 for(const file of manifest!.files as string[]){
-if(!await env.GAME_UPLOADS.head('private-validation/'+sessionId+'/files/'+file)){assetsPresent=false;break}
+if(!await env.GAME_UPLOADS.head(prefix+'files/'+file)){assetsPresent=false;break}
 }
 }
 const evidence:PublicationAssessment={
