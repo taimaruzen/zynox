@@ -7,9 +7,9 @@ import {inspectLargeZip} from '../server/largeZipInspection';
 // Stored video assets are allowed; the archive is never published.
 describe('95 MiB ZIP metadata boundary',()=>{
 it('accepts an allowed 95 MiB ZIP without loading its full body through R2.get',async()=>{
-const payload=new Uint8Array(95*1024*1024);
-randomFillSync(payload);
-const zip=zipSync({'index.html':[strToU8('<!doctype html><title>Load test</title>'),{level:0}],'assets/test.webm':[payload,{level:0}]});
+const first=new Uint8Array(48*1024*1024),second=new Uint8Array(47*1024*1024);
+randomFillSync(first);randomFillSync(second);
+const zip=zipSync({'index.html':[strToU8('<!doctype html><title>Load test</title>'),{level:0}],'assets/a.webm':[first,{level:0}],'assets/b.webm':[second,{level:0}]});
 expect(zip.length).toBeGreaterThan(94*1024*1024);
 expect(zip.length).toBeLessThanOrEqual(100*1024*1024);
 let maxRead=0,readCount=0;
@@ -25,7 +25,7 @@ return {arrayBuffer:async()=>bytes.buffer,body:new ReadableStream({start(c){c.en
 } as unknown as R2Bucket;
 const result=await inspectLargeZip(bucket,'test.zip');
 expect(result.ok).toBe(true);
-if(result.ok){expect(result.entries).toHaveLength(2);expect(result.expandedBytes).toBeGreaterThan(94*1024*1024)}
+if(result.ok){expect(result.entries).toHaveLength(3);expect(result.expandedBytes).toBeGreaterThan(94*1024*1024)}
 expect(maxRead).toBeLessThanOrEqual(1024*1024);
 expect(readCount).toBeGreaterThan(1);
 },120000);
