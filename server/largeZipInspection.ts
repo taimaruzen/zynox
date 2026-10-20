@@ -36,6 +36,7 @@ const nameLength=v.getUint16(pos+28,true),extra=v.getUint16(pos+30,true),comment
 const end=pos+46+nameLength+extra+comment;
 if(end>cd.length||nameLength===0||compressed===0xffffffff||uncompressed===0xffffffff||offset===0xffffffff||disk!==0)return reject('ZIP64または不正なエントリです');
 const name=decoder.decode(cd.subarray(pos+46,pos+46+nameLength)),parts=name.split('/');
+if(name.includes('\\u0000')||name.includes('\\r')||name.includes('\\n')||parts.some(p=>p.length===0&&!name.endsWith('/')))return reject('不正なファイル名です');
 if(name.startsWith('/')||name.includes('\\')||name.includes('\0')||parts.some(p=>p==='.'||p==='..')||/^[a-z]:/i.test(name)||name.length>250)return reject('危険なパスが含まれています');
 if(flags&1||flags&8||![0,8].includes(method))return reject('暗号化または非対応のZIP形式です');
 const unixMode=external>>>16;if((unixMode&0xf000)===0xa000)return reject('シンボリックリンクは使用できません');
