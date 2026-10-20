@@ -20,6 +20,7 @@ const category=typeof data.category==='string'?data.category:'';
 const orientation=typeof data.orientation==='string'?data.orientation:'auto';
 if(!/^[0-9a-f-]{36}$/.test(sessionId)||!title||title.length>80||description.length>2000||!categories.includes(category)||!['auto','portrait','landscape'].includes(orientation))return json({error:'ゲーム情報を確認してください'},400);
 const session=await env.DB.prepare('SELECT id,object_key,expected_size,state FROM large_upload_sessions WHERE id=? AND user_id=?').bind(sessionId,user.id).first<Session>();
+if(session?.state==='registered_private'){const game=await env.DB.prepare('SELECT id,status FROM games WHERE owner_id=? AND zip_key=? LIMIT 1').bind(user.id,session.object_key).first<{id:string;status:string}>();if(game)return json({ok:true,id:game.id,status:game.status,alreadyRegistered:true})}
 if(!session||session.state!=='inspected')return json({error:'非公開検査済みのアップロードが見つかりません'},409);
 const object=await env.GAME_UPLOADS.head(session.object_key);
 if(!object||object.size!==session.expected_size)return json({error:'ZIPファイルの保存状態を確認できません'},409);
