@@ -25,8 +25,8 @@ if(updated.meta.changes!==1)return out({error:'既に処理されています'},
 if(game.owner_id===user.id)return out({counted:false,reason:'self_play'});
 const prior=await env.DB.prepare('SELECT 1 FROM play_sessions WHERE viewer_id=? AND game_id=? AND counted=1 AND completed_at>? LIMIT 1').bind(user.id,id,now-86400).first();
 if(prior)return out({counted:false,reason:'cooldown'});
-const count=await env.DB.prepare('UPDATE play_sessions SET counted=1 WHERE id=? AND counted=0').bind(session).run();
-if(count.meta.changes!==1)return out({error:'処理済みです'},409);
+const count=await env.DB.prepare('UPDATE play_sessions SET counted=1 WHERE id=? AND counted=0 AND NOT EXISTS (SELECT 1 FROM play_sessions WHERE viewer_id=? AND game_id=? AND counted=1 AND completed_at>?)').bind(session,user.id,id,now-86400).run();
+if(count.meta.changes!==1)return out({counted:false,reason:'cooldown'});
 await env.DB.prepare('INSERT OR IGNORE INTO zp_ledger(id,game_id,creator_id,play_session_id,amount,created_at) VALUES(?,?,?,?,1,?)').bind(crypto.randomUUID(),id,game.owner_id,session,now).run();
 return out({counted:true,creatorZp:1});
 }
