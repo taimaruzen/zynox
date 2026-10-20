@@ -1,8 +1,8 @@
 // Metadata-only ZIP inspection for large R2 objects.
 // This does NOT decompress, verify CRCs, or authorize publication.
 type Bucket=R2Bucket;
-const allowed=new Set(['html','htm','js','mjs','css','json','png','jpg','jpeg','gif','webp','svg','ico','wav','mp3','ogg','mp4','webm','woff','woff2','ttf','txt']);
-type Entry={name:string;compressed:number;uncompressed:number;method:number;crc32:number;offset:number};
+const allowed=new Set(['html','htm','js','mjs','css','json','png','jpg','jpeg','gif','webp','svg','ico','wav','mp3','ogg','mp4','webm','woff','woff2','ttf','txt']);export type LargeZipEntry={name:string;compressed:number;uncompressed:number;method:number;crc32:number;offset:number};
+type Entry=LargeZipEntry;
 type Result={ok:true;entries:Entry[];expandedBytes:number}|{ok:false;error:string};
 const reject=(error:string):Result=>({ok:false,error});
 const MAX_ZIP=100*1024*1024,MAX_EXPANDED=250*1024*1024,MAX_FILE=64*1024*1024,MAX_ENTRIES=500;

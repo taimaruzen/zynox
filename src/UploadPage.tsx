@@ -65,7 +65,23 @@ setLargeStatus('ZIPの構造を検査中…');
 const complete=await fetch('/api/large-uploads/'+id+'/complete',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({parts})});
 const finished=await complete.json();
 if(!complete.ok)throw Error(finished.error||'ZIP検査に失敗しました');
-setLargeProgress(100);setLargeStatus('非公開保存が完了しました。自動公開はまだ未対応です。');
+setLargeStatus('ゲーム情報を登録中…');
+const registered=await fetch('/api/large-games/register',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sessionId:id,title,description,category,orientation})});
+const game=await registered.json();
+if(!registered.ok)throw Error(game.error||'ゲーム情報を登録できませんでした');
+setUploadedId(game.id);
+setLargeProgress(96);
+setLargeStatus('ZIP内のファイルを検証・展開中…');
+const stage=await fetch('/api/large-games/'+id+'/stage',{method:'POST'});
+const staged=await stage.json();
+if(!stage.ok||!staged.ok){setLargeStatus('ゲーム情報は登録済みですが、ファイル検証は未完了です。公開されません。');throw Error(staged.error||'ZIPの展開・CRC検証に失敗しました')}
+setLargeStatus('自動公開の安全判定中…');
+const published=await fetch('/api/large-games/'+id+'/publish',{method:'POST'});
+const publication=await published.json();
+setLargeProgress(100);
+if(published.ok&&publication.published){setLargeStatus('ゲームを自動公開しました！');}
+else{setLargeStatus('ZIPの検証・非公開保存が完了しました。公開の安全条件はまだ満たしていません。');setNotice(Array.isArray(publication.reasons)?publication.reasons.join(' / '):publication.error||'公開待ちです');}
+if(thumbnail){try{await saveThumbnail(game.id)}catch{setNotice('ゲームは登録済みです。サムネイルはマイページから設定してください')}}
 }catch(e){await fetch('/api/large-uploads/'+id+'/abort',{method:'DELETE'}).catch(()=>{});throw e}
 }
 async function submit(e:React.FormEvent){e.preventDefault();if((!file&&!uploadedId)||compressing)return;setBusy(true);setError('');setNotice('');try{
@@ -75,12 +91,14 @@ if(!id){const form=new FormData();form.append('title',title);form.append('descri
 if(thumbnail){try{await saveThumbnail(id!)}catch(e){setNotice('ゲーム本体は審査待ちとして保存済みです。サムネイルだけ保存できませんでした。再試行するか、マイページから後で設定できます。');setError(e instanceof Error?e.message:'サムネイルの保存に失敗しました');return}}
 onDone()
 }catch(e){setError(e instanceof Error?e.message:'投稿できませんでした')}finally{setBusy(false)}}
-return <main className="max-w-3xl mx-auto px-5 py-12 text-white"><button onClick={onBack} className="text-neutral-400 hover:text-white flex gap-2 items-center mb-8"><ArrowLeft size={18}/> 戻る</button><h1 className="text-3xl font-bold mb-3">ゲームを投稿する</h1><p className="text-neutral-400 mb-8">HTML5・JavaScriptゲームのZIPとサムネイルをアップロード。投稿後は審査待ちとなり、承認後に公開されます。</p><form onSubmit={submit} className="rounded-2xl bg-[#222] p-6 sm:p-9 space-y-6">
+return <main className="max-w-3xl mx-auto px-5 py-12 text-white"><button onClick={onBack} className="text-neutral-400 hover:text-white flex gap-2 items-center mb-8"><ArrowLeft size={18}/> 戻る</button><h1 className="text-3xl font-bold mb-3">ゲームを投稿する</h1><p className="text-neutral-400 mb-8">HTML5・JavaScriptゲームのZIPとサムネイルをアップロード。安全検証に合格したゲームは、管理者承認なしで自動公開されます。</p><form onSubmit={submit} className="rounded-2xl bg-[#222] p-6 sm:p-9 space-y-6">
 <label className="block text-sm">ゲームタイトル（80文字以内）<input required disabled={!!uploadedId} maxLength={80} value={title} onChange={e=>setTitle(e.target.value)} className="block mt-2 w-full bg-[#333] rounded-lg p-3 outline-none disabled:opacity-60"/></label>
 <label className="block text-sm">説明（2000文字以内）<textarea disabled={!!uploadedId} maxLength={2000} rows={4} value={description} onChange={e=>setDescription(e.target.value)} className="block mt-2 w-full bg-[#333] rounded-lg p-3 outline-none disabled:opacity-60"/></label>
 <label className="block text-sm">カテゴリ<select disabled={!!uploadedId} value={category} onChange={e=>setCategory(e.target.value)} className="block mt-2 w-full bg-[#333] rounded-lg p-3 disabled:opacity-60">{['アクション','パズル','レース','シューティング','その他'].map(c=><option key={c}>{c}</option>)}</select></label><label className="block text-sm">推奨画面方向<select value={orientation} disabled={!!uploadedId} onChange={e=>setOrientation(e.target.value)} className="mt-2 block w-full rounded-lg bg-[#333] p-3"><option value="auto">自動（縦・横に対応）</option><option value="portrait">縦向き推奨</option><option value="landscape">横向き推奨</option></select><span className="mt-2 block text-xs text-neutral-400">画面方向は推奨設定です。ゲーム自体の画面対応も必要です。</span></label>
-<label className="block border border-dashed border-white/30 rounded-xl p-6 text-center cursor-pointer"><UploadCloud className="mx-auto mb-3 text-indigo-300" size={36}/><span className="block text-sm">{file?file.name:'ゲームZIPを選択（最大100MiB・10MiB超は非公開テスト保存）'}</span><input required={!uploadedId} disabled={!!uploadedId} type="file" accept=".zip,application/zip" className="block mx-auto mt-4 max-w-full text-sm" onChange={e=>setFile(e.target.files?.[0]||null)}/></label><p className="text-xs leading-6 text-amber-200">10MiBを超えるZIPは、現在はR2への非公開テスト保存のみ対応しています。ゲーム一覧への登録・公開はまだ行われません。</p>{largeStatus&&<div role="status" className="rounded-lg bg-[#303044] p-4 text-sm"><p>{largeStatus}</p><progress value={largeProgress} max={100} className="mt-3 w-full"/><p className="mt-1">{largeProgress}%</p></div>}
+<label className="block border border-dashed border-white/30 rounded-xl p-6 text-center cursor-pointer"><UploadCloud className="mx-auto mb-3 text-indigo-300" size={36}/><span className="block text-sm">{file?file.name:'ゲームZIPを選択（最大100MiB・10MiB超は非公開の審査待ち登録）'}</span><input required={!uploadedId} disabled={!!uploadedId} type="file" accept=".zip,application/zip" className="block mx-auto mt-4 max-w-full text-sm" onChange={e=>setFile(e.target.files?.[0]||null)}/></label><p className="text-xs leading-6 text-amber-200">10MiBを超えるZIPは、非公開保存後に審査待ちとしてマイページへ登録します。大容量ゲームはZIP全体の安全検証後に自動公開され、隔離ランタイムで実行されます。</p>{largeStatus&&<div role="status" className="rounded-lg bg-[#303044] p-4 text-sm"><p>{largeStatus}</p><progress value={largeProgress} max={100} className="mt-3 w-full"/><p className="mt-1">{largeProgress}%</p></div>}
 <div className="rounded-xl border border-white/15 bg-[#292929] p-5"><p className="mb-3 flex items-center gap-2 font-semibold"><ImagePlus size={20} className="text-indigo-300"/> サムネイル画像 <span className="text-xs font-normal text-neutral-400">任意・最大2MB</span></p><label className="relative block cursor-pointer overflow-hidden rounded-lg border-2 border-dashed border-indigo-400/50 hover:border-indigo-300 focus-within:ring-2 focus-within:ring-indigo-400">{preview?<img src={preview} alt="選択したサムネイルのプレビュー" className="aspect-video w-full object-cover"/>:<div className="grid aspect-video place-items-center bg-gradient-to-br from-indigo-950 to-slate-800"><div className="flex flex-col items-center gap-3 text-indigo-200"><ImagePlus size={36}/><span className="text-sm font-semibold">ここをクリックして画像を選択</span></div></div>}<input aria-label="サムネイル画像を選択" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" className="absolute inset-0 h-full w-full cursor-pointer opacity-0" onChange={e=>{void selectThumbnail(e.target.files?.[0]||null);e.currentTarget.value=''}}/></label><p className="mt-3 text-sm">{compressing?'画像を圧縮しています…':thumbnail?'選択中：'+thumbnail.name+'（'+(thumbnail.size/1024).toFixed(0)+'KB）':'画像はまだ選択されていません'}</p><p className="mt-2 text-xs text-neutral-400">PNG・JPEG・WebP対応。2MBを超える画像は自動でWebPに圧縮します。推奨比率は16:9です。</p></div>
 {notice&&<p role="status" className="text-amber-300 text-sm">{notice}</p>}{error&&<p role="alert" className="text-red-400 text-sm">{error}</p>}
 <button disabled={busy||compressing||(!file&&!uploadedId)} className="w-full bg-indigo-500 rounded-lg p-3 font-bold disabled:opacity-50">{busy?'保存中…':uploadedId?'サムネイル保存を再試行する':'審査待ちとして投稿する'}</button>{uploadedId&&<button type="button" onClick={onDone} className="w-full text-sm text-neutral-300 underline">サムネイルは後で設定してマイページへ</button>}
 </form></main>}
+
+
