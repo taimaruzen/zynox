@@ -14,6 +14,7 @@ if(!row||!['inspected','registered_private'].includes(row.state))return {ok:fals
 const claim=await env.DB.prepare("UPDATE large_upload_sessions SET state='staging' WHERE id=? AND state IN ('inspected','registered_private')").bind(sessionId).run();
 if(claim.meta.changes!==1)return {ok:false,status:409,error:'別の処理が進行中です'};
 const registered=await env.DB.prepare('SELECT id FROM games WHERE owner_id=? AND zip_key=? AND status=? LIMIT 1').bind(row.user_id,row.object_key,'pending').first<{id:string}>();
+if(row.state==='registered_private'&&!registered)return {ok:false,status:409,error:'登録済みゲーム情報が見つかりません'};
 const prefix=registered?'staged/'+registered.id+'/':'private-validation/'+row.id+'/';
 const priorState=row.state;
 const written:string[]=[];
