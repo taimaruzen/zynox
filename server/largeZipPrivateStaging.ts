@@ -1,3 +1,4 @@
+import {stageStoredZipEntry} from './largeZipStoredStaging';
 import {inspectLargeZip} from './largeZipInspection';
 import {verifyLargeZipEntry} from './largeZipEntryVerification';
 
@@ -17,14 +18,12 @@ const written:string[]=[];
 try{
 const inspection=await inspectLargeZip(env.GAME_UPLOADS,row.object_key);
 if(!inspection.ok)throw Error(inspection.error);
-if(inspection.entries.length>MAX_FILES||inspection.expandedBytes>MAX_TOTAL||inspection.entries.some(e=>e.uncompressed>MAX_ENTRY))throw Error('現段階の検証上限（100ファイル・各16MiB）を超えています');
+if(inspection.entries.length>MAX_FILES||inspection.expandedBytes>MAX_TOTAL||inspection.entries.some(e=>e.uncompressed>(e.method===0?64*1024*1024:MAX_ENTRY)))throw Error('現段階の検証上限（100ファイル・各16MiB）を超えています');
 for(const entry of inspection.entries){
-const checked=await verifyLargeZipEntry(env.GAME_UPLOADS,row.object_key,entry.name,entry);
-if(!checked.ok)throw Error(checked.error);
 const ext=entry.name.split('.').pop()?.toLowerCase()||'';
 const key=prefix+'files/'+entry.name;
 written.push(key);
-await env.GAME_UPLOADS.put(key,checked.data,{httpMetadata:{contentType:mime[ext]||'application/octet-stream'},customMetadata:{visibility:'private-unverified'}});
+if(entry.method===0){await stageStoredZipEntry(env.GAME_UPLOADS,row.object_key,key,entry,mime[ext]||'application/octet-stream')}else{const checked=await verifyLargeZipEntry(env.GAME_UPLOADS,row.object_key,entry.name,entry);if(!checked.ok)throw Error(checked.error);await env.GAME_UPLOADS.put(key,checked.data,{httpMetadata:{contentType:mime[ext]||'application/octet-stream'},customMetadata:{visibility:'private-unverified'}})}
 }
 const manifest={uploadSessionId:row.id,files:inspection.entries.map(e=>e.name),visibility:'private',verifiedCrc:true,approved:false,publishable:false,stagedAt:new Date().toISOString()};
 written.push(prefix+'manifest.json');
