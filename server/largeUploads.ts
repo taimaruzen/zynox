@@ -1,3 +1,4 @@
+import {inspectLargeZip} from './largeZipInspection';
 // Phase 1 of large ZIP uploads: private multipart staging only.
 // No completion/publication endpoint is exposed until streaming ZIP validation is implemented.
 type Env={DB:D1Database;GAME_UPLOADS:R2Bucket};
@@ -32,6 +33,22 @@ await env.DB.prepare("UPDATE large_upload_sessions SET state='aborted' WHERE id=
 return reply({ok:true});
 }
 if(row.state!=='uploading'||row.expires_at<=now)return reply({error:'アップロード期限が切れています'},410);
+if(path.endsWith('/complete')&&req.method==='POST'){
+if(Number(req.headers.get('content-length')||0)>8192)return reply({error:'リクエストが大きすぎます'},413);
+let body:unknown;try{body=await req.json()}catch{return reply({error:'Invalid JSON'},400)}
+const parts=typeof body==='object'&&body!==null&&'parts' in body?(body as {parts:unknown}).parts:null;
+const expectedParts=Math.ceil(row.expected_size/PART);
+if(!Array.isArray(parts)||parts.length!==expectedParts||parts.some((p,i)=>!p||typeof p!=='object'||p.partNumber!==i+1||typeof p.etag!=='string'||p.etag.length<1||p.etag.length>200))return reply({error:'アップロードパート情報が不正です'},400);
+try{
+await upload.complete(parts as R2UploadedPart[]);
+const object=await env.GAME_UPLOADS.head(row.object_key);
+if(!object||object.size!==row.expected_size){await env.DB.prepare("UPDATE large_upload_sessions SET state='rejected' WHERE id=?").bind(row.id).run();await env.GAME_UPLOADS.delete(row.object_key).catch(()=>{});return reply({error:'アップロードサイズが一致しません'},400)}
+const inspection=await inspectLargeZip(env.GAME_UPLOADS,row.object_key);
+if(!inspection.ok){await env.DB.prepare("UPDATE large_upload_sessions SET state='rejected' WHERE id=?").bind(row.id).run();await env.GAME_UPLOADS.delete(row.object_key).catch(()=>{});return reply({error:inspection.error},400)}
+await env.DB.prepare("UPDATE large_upload_sessions SET state='inspected' WHERE id=? AND state='uploading'").bind(row.id).run();
+return reply({ok:true,status:'inspected_private',files:inspection.entries.length,expandedBytes:inspection.expandedBytes,message:'メタデータ検査のみ完了。ゲームとしての投稿・公開はまだできません'});
+}catch(e){console.error('large_upload.complete_failed',e);return reply({error:'アップロード完了処理に失敗しました'},500)}
+}
 if(match[2]&&req.method==='PUT'){
 const number=Number(match[2]),parts=Math.ceil(row.expected_size/PART);
 if(!Number.isInteger(number)||number<1||number>parts)return reply({error:'Invalid part number'},400);
