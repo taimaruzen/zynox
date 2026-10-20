@@ -1,3 +1,4 @@
+import {validateGameZip} from './zipValidation';
 type Env={DB:D1Database;GAME_UPLOADS:R2Bucket};
 type User={id:string;username:string;email:string};
 const respond=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});
@@ -17,6 +18,7 @@ if(title.length<1||title.length>80||description.length>2000||!categories.include
 if(!(file instanceof File)||!file.name.toLowerCase().endsWith('.zip')||file.size<4||file.size>max)return respond({error:'10MB以下のZIPファイルを選択してください'},400);
 const data=await file.arrayBuffer();const head=new Uint8Array(data,0,4);
 if(head[0]!==0x50||head[1]!==0x4b||head[2]!==0x03||head[3]!==0x04)return respond({error:'ZIPファイルの形式が正しくありません'},400);
+const validation=validateGameZip(data);if(!validation.ok)return respond({error:validation.error},400);
 const id=crypto.randomUUID(),key='pending/'+user.id+'/'+id+'.zip';
 try{await env.GAME_UPLOADS.put(key,data,{httpMetadata:{contentType:'application/zip'}});await env.DB.prepare('INSERT INTO games(id,owner_id,title,description,category,zip_key,zip_size,status) VALUES(?,?,?,?,?,?,?,?)').bind(id,user.id,title,description,category,key,file.size,'pending').run();return respond({ok:true,id,status:'pending'},201)}
 catch(e){console.error('games.upload_failed',e);await env.GAME_UPLOADS.delete(key).catch(()=>{});return respond({error:'アップロードに失敗しました'},500)}
