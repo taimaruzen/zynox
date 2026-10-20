@@ -15,12 +15,12 @@ if(!match)return json({error:'Not found'},404);
 const id=match[1],game=await env.DB.prepare('SELECT id,owner_id,status,thumbnail_key FROM games WHERE id=?').bind(id).first<{id:string;owner_id:string;status:string;thumbnail_key:string|null}>();
 if(!game)return json({error:'Not found'},404);
 if(req.method==='GET'||req.method==='HEAD'){
-if(game.status!=='approved'||!game.thumbnail_key)return json({error:'Not found'},404);
+if(!game.thumbnail_key||(game.status!=='approved'&&user?.id!==game.owner_id))return json({error:'Not found'},404);
 const object=await env.GAME_UPLOADS.get(game.thumbnail_key);
 if(!object)return json({error:'Not found'},404);
 const ext=game.thumbnail_key.split('.').pop()||'';
 if(!mime[ext])return json({error:'Not found'},404);
-return new Response(req.method==='HEAD'?null:object.body,{headers:{'content-type':mime[ext],'cache-control':'public,max-age=60','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; sandbox",'cross-origin-resource-policy':'same-origin'}});
+return new Response(req.method==='HEAD'?null:object.body,{headers:{'content-type':mime[ext],'cache-control':'no-store','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; sandbox",'cross-origin-resource-policy':'same-origin'}});
 }
 if(req.method!=='POST')return json({error:'Method not allowed'},405);
 if(!user||user.id!==game.owner_id)return json({error:'投稿者本人のみ変更できます'},403);
