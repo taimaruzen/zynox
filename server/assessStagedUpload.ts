@@ -29,7 +29,7 @@ if(!await env.GAME_UPLOADS.head(prefix+'files/'+file)){assetsPresent=false;break
 }
 }
 const evidence:PublicationAssessment={
-zipVerified:row.state==='staged_private'&&manifest?.uploadSessionId===sessionId,
+zipVerified:row.state==='staged_private'&&manifest?.uploadSessionId===sessionId&&(!game||manifest?.gameId===game.id),
 crcVerified:assetsPresent&&manifest?.verifiedCrc===true,
 allAssetsStaged:assetsPresent&&manifest?.visibility==='private'&&manifest?.approved===false&&manifest?.publishable===false,
 isolatedOriginVerified:false,
