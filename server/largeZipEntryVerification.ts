@@ -1,5 +1,6 @@
 import {Inflate} from 'fflate';
 import {inspectLargeZip} from './largeZipInspection';
+import type {LargeZipEntry} from './largeZipInspection';
 
 // Private validation helper for one ZIP entry. Not wired to public game approval.
 // The per-entry limit is deliberately conservative until streaming-to-R2 is ready.
@@ -14,11 +15,11 @@ const bytes=new Uint8Array(await object.arrayBuffer());
 if(bytes.byteLength!==length)throw Error('ZIPの読み取りサイズが一致しません');
 return bytes;
 }
-export async function verifyLargeZipEntry(bucket:R2Bucket,key:string,name:string):Promise<{ok:true;data:Uint8Array}|{ok:false;error:string}>{
+export async function verifyLargeZipEntry(bucket:R2Bucket,key:string,name:string,prevalidatedEntry?:LargeZipEntry):Promise<{ok:true;data:Uint8Array}|{ok:false;error:string}>{
 try{
-const inspection=await inspectLargeZip(bucket,key);
-if(!inspection.ok)return inspection;
-const entry=inspection.entries.find(e=>e.name===name);
+let entry=prevalidatedEntry;
+if(entry&&entry.name!==name)return {ok:false,error:'検証対象のファイル名が一致しません'};
+if(!entry){const inspection=await inspectLargeZip(bucket,key);if(!inspection.ok)return inspection;entry=inspection.entries.find(e=>e.name===name)}
 if(!entry)return {ok:false,error:'ZIP内に指定ファイルがありません'};
 if(entry.uncompressed>MAX_OUTPUT)return {ok:false,error:'このファイルは検証可能なサイズを超えています'};
 const header=await readRange(bucket,key,entry.offset,30);
