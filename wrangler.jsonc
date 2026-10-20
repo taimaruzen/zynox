@@ -22,5 +22,6 @@
       "binding": "GAME_UPLOADS",
       "bucket_name": "zynox-game-uploads"
     }
-  ]
+  ],
+  "previews": {}
 }
