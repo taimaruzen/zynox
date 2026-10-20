@@ -70,8 +70,13 @@ const registered=await fetch('/api/large-games/register',{method:'POST',headers:
 const game=await registered.json();
 if(!registered.ok)throw Error(game.error||'ゲーム情報を登録できませんでした');
 setUploadedId(game.id);
+setLargeProgress(96);
+setLargeStatus('ZIP内のファイルを検証・展開中…');
+const stage=await fetch('/api/large-games/'+id+'/stage',{method:'POST'});
+const staged=await stage.json();
+if(!stage.ok||!staged.ok){setLargeStatus('ゲーム情報は登録済みですが、ファイル検証は未完了です。');throw Error(staged.error||'ZIPの展開・CRC検証に失敗しました')}
 setLargeProgress(100);
-setLargeStatus('審査待ちとして登録しました。100MBゲームの公開はまだ未対応です。');
+setLargeStatus('ゲーム情報とファイル検証が完了しました。公開前の安全審査は未完了です。');
 if(thumbnail){try{await saveThumbnail(game.id)}catch{setNotice('ゲームは登録済みです。サムネイルはマイページから設定してください')}}
 }catch(e){await fetch('/api/large-uploads/'+id+'/abort',{method:'DELETE'}).catch(()=>{});throw e}
 }
