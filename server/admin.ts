@@ -35,6 +35,27 @@ await env.DB.prepare("INSERT INTO moderation_events(id,game_id,admin_id,action,n
 return reply({ok:true});
 }catch(e){console.error('games.approval_failed',e);return reply({error:'承認処理に失敗しました。管理者に確認してください'},500)}
 }
+const unpublish=path.match(/^\/api\/admin\/games\/([a-f0-9-]{36})\/unpublish$/);
+if(unpublish&&req.method==='POST'){
+if(req.headers.get('origin')!==new URL(req.url).origin)return reply({error:'Invalid origin'},403);
+if(Number(req.headers.get('content-length')||0)>2048)return reply({error:'リクエストが大きすぎます'},413);
+let input:unknown;try{input=await req.json()}catch{return reply({error:'Invalid JSON'},400)}
+const note=typeof input==='object'&&input!==null&&'reason' in input&&typeof input.reason==='string'?input.reason.trim():'';
+if(note.length<5||note.length>500)return reply({error:'公開停止理由は5〜500文字で入力してください'},400);
+const id=unpublish[1],game=await env.DB.prepare("SELECT id FROM games WHERE id=? AND status='approved'").bind(id).first();
+if(!game)return reply({error:'公開中のゲームが見つかりません'},409);
+const changed=await env.DB.prepare("UPDATE games SET status='rejected' WHERE id=? AND status='approved'").bind(id).run();
+if(changed.meta.changes!==1)return reply({error:'ゲームの公開状態が変更されています'},409);
+try{
+const key='staged/'+id+'/manifest.json',object=await env.GAME_UPLOADS.get(key);
+if(object){
+const manifest=await object.json() as Record<string,unknown>;
+await env.GAME_UPLOADS.put(key,JSON.stringify({...manifest,approved:false,visibility:'private',unpublishedAt:new Date().toISOString()}),{httpMetadata:{contentType:'application/json'}});
+}
+await env.DB.prepare("INSERT INTO moderation_events(id,game_id,admin_id,action,note) VALUES(?,?,?,?,?)").bind(crypto.randomUUID(),id,user.id,'rejected','緊急公開停止: '+note).run();
+return reply({ok:true,status:'rejected'});
+}catch(e){console.error('games.unpublish_failed',e);return reply({error:'一覧から非公開にしましたが、実行環境の停止確認が必要です'},500)}
+}
 const reject=path.match(/^\/api\/admin\/games\/([a-f0-9-]{36})\/reject$/);
 if(reject&&req.method==='POST'){if(req.headers.get('origin')!==new URL(req.url).origin)return reply({error:'Invalid origin'},403);let data:unknown;try{data=await req.json()}catch{return reply({error:'Invalid JSON'},400)}const note=typeof data==='object'&&data!==null&&'note' in data&&typeof data.note==='string'?data.note.trim():'';if(note.length<5||note.length>500)return reply({error:'却下理由は5〜500文字で入力してください'},400);const game=await env.DB.prepare("SELECT id FROM games WHERE id=? AND status='pending'").bind(reject[1]).first();if(!game)return reply({error:'審査待ちのゲームが見つかりません'},409);await env.DB.batch([env.DB.prepare("UPDATE games SET status='rejected' WHERE id=? AND status='pending'").bind(reject[1]),env.DB.prepare("INSERT INTO moderation_events(id,game_id,admin_id,action,note) VALUES(?,?,?,?,?)").bind(crypto.randomUUID(),reject[1],user.id,'rejected',note)]);return reply({ok:true})}
 return reply({error:'Not found'},404)
