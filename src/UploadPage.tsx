@@ -34,7 +34,7 @@ try{
 const converted=next.size>MAX_IMAGE?await compressImage(next):next;
 if(version!==selectionVersion.current)return;
 setThumbnail(converted);
-if(converted!==next)setNotice('画像を自動圧縮しました：'+(next.size/1024/1024).toFixed(1)+'MB → '+(converted.size/1024).toFixed(0)+'KB');
+
 }catch(e){if(version===selectionVersion.current)setError(e instanceof Error?e.message:'画像を圧縮できませんでした')}
 finally{if(version===selectionVersion.current)setCompressing(false)}
 }
