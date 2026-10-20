@@ -36,3 +36,12 @@ Status: **PRIVATE MULTIPART + METADATA INSPECTION IMPLEMENTED / PUBLICATION NOT 
 - On metadata rejection the object is removed; on success it remains private under `unverified/` and the session becomes `inspected`.
 - **Not a security clearance:** central-directory metadata can lie. Full local-header consistency checks, bounded streaming extraction, CRC validation, archive collision detection and cleanup still must be implemented before publication. There is currently no user-facing large-upload button.
 - Do not enable the 100 MiB UI or register these objects as games until the full pipeline and tests are complete.
+
+## Phase 3: ZIP local-header consistency checks
+
+- Cross-check each local ZIP header against central-directory flags, method, CRC and size fields.
+- Decode and compare local filenames; reject unsupported stored-file size mismatches.
+- Require contiguous, non-overlapping entry byte ranges from offset zero to the central directory. Reject hidden prefixes/gaps and overlapping entries.
+- Fixed the missing `/complete` route in the multipart upload API.
+- These checks are **not** a substitute for decompression, CRC verification, or a security review. Large uploads remain private and are not published.
+- Still needed: bounded streaming extraction, per-file CRC validation, lifecycle cleanup, end-to-end tests and UI rollout.
