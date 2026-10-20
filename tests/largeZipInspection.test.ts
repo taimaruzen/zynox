@@ -1,6 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {zipSync,strToU8} from 'fflate';
 import {inspectLargeZip} from '../server/largeZipInspection';
+import {verifyLargeZipEntry} from '../server/largeZipEntryVerification';
 
 function fakeBucket(bytes:Uint8Array){
 return {
@@ -32,6 +33,20 @@ it('rejects corrupted local headers',async()=>{
 const bytes=zipSync({'index.html':strToU8('test')});
 bytes[0]=0;
 const result=await inspectLargeZip(fakeBucket(bytes),'test.zip');
+expect(result.ok).toBe(false);
+});
+it('verifies decompressed bytes and CRC32',async()=>{
+const bytes=zipSync({'index.html':strToU8('<h1>OK</h1>')});
+const result=await verifyLargeZipEntry(fakeBucket(bytes),'test.zip','index.html');
+expect(result.ok).toBe(true);
+if(result.ok)expect(new TextDecoder().decode(result.data)).toBe('<h1>OK</h1>');
+});
+it('rejects corrupt compressed payload',async()=>{
+const bytes=zipSync({'index.html':strToU8('HELLO WORLD')});
+const local=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+const offset=30+local.getUint16(26,true)+local.getUint16(28,true);
+bytes[offset]^=0xff;
+const result=await verifyLargeZipEntry(fakeBucket(bytes),'test.zip','index.html');
 expect(result.ok).toBe(false);
 });
 it('rejects truncated archives',async()=>{
