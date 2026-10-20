@@ -52,3 +52,12 @@ Status: **PRIVATE MULTIPART + METADATA INSPECTION IMPLEMENTED / PUBLICATION NOT 
 - Current helper deliberately caps each uncompressed entry at 16 MiB; it buffers one entry before returning it. It is **not** a completed 100 MiB streaming extractor.
 - Before connecting to moderation, implement incremental staging to R2 without buffering large outputs, avoid repeated full-directory inspection for each entry, and add tests for CRC corruption, truncated deflate, memory pressure, and incomplete uploads.
 - No changes to existing 10 MiB user-facing upload limit or approval rules.
+
+## Phase 5: multipart session race hardening
+
+- Completion now claims an upload session with a conditional D1 update to `finalizing` before calling R2 complete. Duplicate completion requests receive a conflict instead of concurrently completing the same upload.
+- Abort now conditionally changes `uploading` to `aborted` before invoking R2 abort, preventing an abort request from racing a finalizing session.
+- Start requests have a small body-size limit.
+- Still needed before rollout: cleanup of expired/failed R2 multipart uploads, retry/reconciliation for partially completed sessions, real-device upload tests, streaming extraction/staging, CRC verification of every file, and administrator approval integration.
+
+**Do not enable the 100 MiB user interface yet.**
