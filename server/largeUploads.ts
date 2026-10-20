@@ -12,6 +12,7 @@ const url=new URL(req.url),path=url.pathname,now=Math.floor(Date.now()/1000);
 if(req.method!=='POST'&&req.method!=='PUT'&&req.method!=='DELETE')return reply({error:'Method not allowed'},405);
 if(req.headers.get('origin')!==url.origin)return reply({error:'Invalid origin'},403);
 if(path==='/api/large-uploads/start'&&req.method==='POST'){
+if(Number(req.headers.get('content-length')||0)>1024)return reply({error:'リクエストが大きすぎます'},413);
 let body:unknown;try{body=await req.json()}catch{return reply({error:'Invalid JSON'},400)}
 const size=typeof body==='object'&&body!==null&&'size' in body?(body as {size:unknown}).size:null;
 if(typeof size!=='number'||!Number.isSafeInteger(size)||size<22||size>MAX)return reply({error:'ZIPは100MiB以下にしてください'},400);
@@ -28,9 +29,9 @@ const row=await env.DB.prepare('SELECT * FROM large_upload_sessions WHERE id=? A
 if(!row)return reply({error:'Upload not found'},404);
 const upload=env.GAME_UPLOADS.resumeMultipartUpload(row.object_key,row.upload_id);
 if(path.endsWith('/abort')&&req.method==='DELETE'){
-if(row.state!=='uploading')return reply({error:'アップロードは終了しています'},409);
+const lock=await env.DB.prepare("UPDATE large_upload_sessions SET state='aborted' WHERE id=? AND user_id=? AND state='uploading'").bind(row.id,user.id).run();
+if(lock.meta.changes!==1)return reply({error:'アップロードは終了しています'},409);
 await upload.abort().catch(()=>{});
-await env.DB.prepare("UPDATE large_upload_sessions SET state='aborted' WHERE id=? AND user_id=?").bind(row.id,user.id).run();
 return reply({ok:true});
 }
 if(row.state!=='uploading'||row.expires_at<=now)return reply({error:'アップロード期限が切れています'},410);
