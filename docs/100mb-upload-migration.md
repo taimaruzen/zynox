@@ -1,6 +1,6 @@
 # Zynox: 100 MiB game upload migration
 
-Status: **DESIGN / NOT ENABLED**. Current production ZIP upload limit remains 10 MiB.
+Status: **PRIVATE MULTIPART + METADATA INSPECTION IMPLEMENTED / PUBLICATION NOT ENABLED**. Current user-facing ZIP upload limit remains 10 MiB. The new API does not register a game in the catalog.
 
 ## Why changing MAX_FILE_SIZE is unsafe
 
@@ -28,3 +28,11 @@ Status: **DESIGN / NOT ENABLED**. Current production ZIP upload limit remains 10
 - Monitor Worker CPU/memory, R2 costs, errors and failed uploads.
 - Keep old games and their published manifests unchanged.
 - Do not store R2 S3 API credentials in the frontend or Git repository.
+
+## Phase 2 implemented
+
+- Multipart `/api/large-uploads/:id/complete` accepts the ordered list of uploaded R2 part ETags and verifies the final object size.
+- `server/largeZipInspection.ts` reads only the ZIP tail and bounded central-directory ranges from R2; rejects many malformed archives, unsupported extensions, unsafe names, ZIP64 and excessive expanded-size metadata.
+- On metadata rejection the object is removed; on success it remains private under `unverified/` and the session becomes `inspected`.
+- **Not a security clearance:** central-directory metadata can lie. Full local-header consistency checks, bounded streaming extraction, CRC validation, archive collision detection and cleanup still must be implemented before publication. There is currently no user-facing large-upload button.
+- Do not enable the 100 MiB UI or register these objects as games until the full pipeline and tests are complete.
