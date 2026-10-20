@@ -13,7 +13,8 @@ const row=await env.DB.prepare("SELECT id,user_id,object_key,state FROM large_up
 if(!row||!['inspected','registered_private'].includes(row.state))return {ok:false,status:409,error:'検査済みアップロードがありません'};
 const claim=await env.DB.prepare("UPDATE large_upload_sessions SET state='staging' WHERE id=? AND state IN ('inspected','registered_private')").bind(sessionId).run();
 if(claim.meta.changes!==1)return {ok:false,status:409,error:'別の処理が進行中です'};
-const prefix='private-validation/'+row.id+'/';
+const registered=await env.DB.prepare('SELECT id FROM games WHERE owner_id=? AND zip_key=? AND status=? LIMIT 1').bind(row.user_id,row.object_key,'pending').first<{id:string}>();
+const prefix=registered?'staged/'+registered.id+'/':'private-validation/'+row.id+'/';
 const priorState=row.state;
 const written:string[]=[];
 try{
@@ -26,7 +27,7 @@ const key=prefix+'files/'+entry.name;
 written.push(key);
 if(entry.method===0){await stageStoredZipEntry(env.GAME_UPLOADS,row.object_key,key,entry,mime[ext]||'application/octet-stream')}else{const checked=await verifyLargeZipEntry(env.GAME_UPLOADS,row.object_key,entry.name,entry);if(!checked.ok)throw Error(checked.error);await env.GAME_UPLOADS.put(key,checked.data,{httpMetadata:{contentType:mime[ext]||'application/octet-stream'},customMetadata:{visibility:'private-unverified'}})}
 }
-const manifest={uploadSessionId:row.id,files:inspection.entries.map(e=>e.name),visibility:'private',verifiedCrc:true,approved:false,publishable:false,stagedAt:new Date().toISOString()};
+const manifest={gameId:registered?.id,uploadSessionId:row.id,files:inspection.entries.map(e=>e.name),visibility:'private',verifiedCrc:true,approved:false,publishable:false,stagedAt:new Date().toISOString()};
 written.push(prefix+'manifest.json');
 await env.GAME_UPLOADS.put(prefix+'manifest.json',JSON.stringify(manifest),{httpMetadata:{contentType:'application/json'},customMetadata:{visibility:'private-unverified'}});
 await env.DB.prepare("UPDATE large_upload_sessions SET state='staged_private' WHERE id=? AND state='staging'").bind(row.id).run();
