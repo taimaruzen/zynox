@@ -22,12 +22,13 @@ const upload=await env.GAME_UPLOADS.createMultipartUpload(key,{httpMetadata:{con
 try{await env.DB.prepare('INSERT INTO large_upload_sessions(id,user_id,object_key,upload_id,expected_size,created_at,expires_at,state) VALUES(?,?,?,?,?,?,?,?)').bind(id,user.id,key,upload.uploadId,size,now,now+TTL,'uploading').run()}catch(e){await upload.abort().catch(()=>{});throw e}
 return reply({sessionId:id,partSize:PART,maxSize:MAX,expiresAt:now+TTL});
 }
-const match=path.match(/^\/api\/large-uploads\/([a-f0-9-]{36})(?:\/parts\/(\d+)|\/abort)?$/);
+const match=path.match(/^\/api\/large-uploads\/([a-f0-9-]{36})(?:\/parts\/(\d+)|\/abort|\/complete)?$/);
 if(!match)return reply({error:'Not found'},404);
 const row=await env.DB.prepare('SELECT * FROM large_upload_sessions WHERE id=? AND user_id=?').bind(match[1],user.id).first<Session>();
 if(!row)return reply({error:'Upload not found'},404);
 const upload=env.GAME_UPLOADS.resumeMultipartUpload(row.object_key,row.upload_id);
 if(path.endsWith('/abort')&&req.method==='DELETE'){
+if(row.state!=='uploading')return reply({error:'アップロードは終了しています'},409);
 await upload.abort().catch(()=>{});
 await env.DB.prepare("UPDATE large_upload_sessions SET state='aborted' WHERE id=? AND user_id=?").bind(row.id,user.id).run();
 return reply({ok:true});
