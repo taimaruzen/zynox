@@ -1,1 +1,17 @@
-{"name":"zynox","compatibility_date":"2026-10-20","assets":{"directory":"./dist","not_found_handling":"single-page-application"}}
+{
+  "name": "zynox",
+  "main": "server/index.ts",
+  "compatibility_date": "2026-10-20",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "zynox-db",
+      "database_id": "6dfe4292-8723-411d-ac73-499d31663d08"
+    }
+  ]
+}
