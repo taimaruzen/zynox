@@ -45,7 +45,7 @@ if(failure)throw failure;
 if(entry.compressed===0)inflate.push(new Uint8Array(),true);
 if(failure)throw failure;
 }
-if(total!==entry.uncompressed||(crc^0xffffffff)!==entry.crc32)return {ok:false,error:'展開サイズまたはCRC32が一致しません'};
+if(total!==entry.uncompressed||((crc^0xffffffff)>>>0)!==entry.crc32)return {ok:false,error:'展開サイズまたはCRC32が一致しません'};
 const data=new Uint8Array(total);let cursor=0;for(const chunk of chunks){data.set(chunk,cursor);cursor+=chunk.length}
 return {ok:true,data};
 }catch(e){console.error('large_zip.entry_verification_failed',e);return {ok:false,error:'ZIPファイルの展開検証に失敗しました'}}
