@@ -3,7 +3,7 @@ import type {PublicationAssessment} from './automaticPublicationPolicy';
 
 type Env={DB:D1Database;GAME_UPLOADS:R2Bucket};
 type Session={id:string;user_id:string;state:string};
-type PrivateManifest={uploadSessionId?:unknown;files?:unknown;verifiedCrc?:unknown;visibility?:unknown;approved?:unknown;publishable?:unknown};
+type PrivateManifest={gameId?:unknown;uploadSessionId?:unknown;files?:unknown;verifiedCrc?:unknown;visibility?:unknown;approved?:unknown;publishable?:unknown};
 
 /**
  * Construct publication eligibility exclusively from server-owned evidence.
