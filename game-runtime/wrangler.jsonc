@@ -1,0 +1,19 @@
+{
+  "name": "zynox-game-runtime",
+  "main": "index.ts",
+  "compatibility_date": "2026-10-20",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "zynox-db",
+      "database_id": "6dfe4292-8723-411d-ac73-499d31663d08"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "GAME_UPLOADS",
+      "bucket_name": "zynox-game-uploads"
+    }
+  ],
+  "workers_dev": true
+}
