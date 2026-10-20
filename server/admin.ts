@@ -13,6 +13,28 @@ const download=path.match(/^\/api\/admin\/games\/([a-f0-9-]{36})\/download$/);
 if(download&&req.method==='GET'){const game=await env.DB.prepare('SELECT zip_key,title FROM games WHERE id=?').bind(download[1]).first<{zip_key:string;title:string}>();if(!game)return reply({error:'ゲームが見つかりません'},404);const object=await env.GAME_UPLOADS.get(game.zip_key);if(!object)return reply({error:'ZIPが見つかりません'},404);return new Response(object.body,{headers:{'content-type':'application/zip','content-disposition':'attachment; filename="game-review.zip"','cache-control':'no-store','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; sandbox"}})}
 const prepare=path.match(/^\/api\/admin\/games\/([a-f0-9-]{36})\/prepare$/);
 if(prepare&&req.method==='POST'){if(req.headers.get('origin')!==new URL(req.url).origin)return reply({error:'Invalid origin'},403);const result=await prepareGame(env,prepare[1]);return reply(result,result.ok?200:result.status)}
+const approve=path.match(/^\/api\/admin\/games\/([a-f0-9-]{36})\/approve$/);
+if(approve&&req.method==='POST'){
+if(req.headers.get('origin')!==new URL(req.url).origin)return reply({error:'Invalid origin'},403);
+let data:unknown;try{data=await req.json()}catch{return reply({error:'Invalid JSON'},400)}
+if(typeof data!=='object'||data===null||!('reviewed' in data)||data.reviewed!==true)return reply({error:'手動レビューの確認が必要です'},400);
+const id=approve[1],game=await env.DB.prepare("SELECT id FROM games WHERE id=? AND status='pending'").bind(id).first();
+if(!game)return reply({error:'審査待ちのゲームが見つかりません'},409);
+const key='staged/'+id+'/manifest.json',object=await env.GAME_UPLOADS.get(key);
+if(!object)return reply({error:'先にZIPを検証・展開してください'},409);
+let manifest:{gameId?:string;files?:string[];approved?:boolean;visibility?:string};
+try{manifest=await object.json()}catch{return reply({error:'マニフェストが不正です'},409)}
+if(manifest.gameId!==id||!Array.isArray(manifest.files)||!manifest.files.includes('index.html')||manifest.files.length===0||manifest.files.length>100)return reply({error:'マニフェストの検証に失敗しました'},409);
+for(const file of manifest.files){if(typeof file!=='string'||file.includes('..')||file.startsWith('/')||file.includes('\\'))return reply({error:'ファイルパスが不正です'},409);if(!await env.GAME_UPLOADS.head('staged/'+id+'/files/'+file))return reply({error:'展開ファイルが不足しています'},409)}
+const approved={...manifest,approved:true,visibility:'public',approvedAt:new Date().toISOString(),approvedBy:user.id};
+try{
+await env.GAME_UPLOADS.put(key,JSON.stringify(approved),{httpMetadata:{contentType:'application/json'}});
+const update=await env.DB.prepare("UPDATE games SET status='approved' WHERE id=? AND status='pending'").bind(id).run();
+if(update.meta.changes!==1){await env.GAME_UPLOADS.put(key,JSON.stringify(manifest),{httpMetadata:{contentType:'application/json'}});return reply({error:'審査状態が変更されています'},409)}
+await env.DB.prepare("INSERT INTO moderation_events(id,game_id,admin_id,action,note) VALUES(?,?,?,?,?)").bind(crypto.randomUUID(),id,user.id,'approved','手動レビュー済み').run();
+return reply({ok:true});
+}catch(e){console.error('games.approval_failed',e);return reply({error:'承認処理に失敗しました。管理者に確認してください'},500)}
+}
 const reject=path.match(/^\/api\/admin\/games\/([a-f0-9-]{36})\/reject$/);
 if(reject&&req.method==='POST'){if(req.headers.get('origin')!==new URL(req.url).origin)return reply({error:'Invalid origin'},403);let data:unknown;try{data=await req.json()}catch{return reply({error:'Invalid JSON'},400)}const note=typeof data==='object'&&data!==null&&'note' in data&&typeof data.note==='string'?data.note.trim():'';if(note.length<5||note.length>500)return reply({error:'却下理由は5〜500文字で入力してください'},400);const game=await env.DB.prepare("SELECT id FROM games WHERE id=? AND status='pending'").bind(reject[1]).first();if(!game)return reply({error:'審査待ちのゲームが見つかりません'},409);await env.DB.batch([env.DB.prepare("UPDATE games SET status='rejected' WHERE id=? AND status='pending'").bind(reject[1]),env.DB.prepare("INSERT INTO moderation_events(id,game_id,admin_id,action,note) VALUES(?,?,?,?,?)").bind(crypto.randomUUID(),reject[1],user.id,'rejected',note)]);return reply({ok:true})}
 return reply({error:'Not found'},404)
