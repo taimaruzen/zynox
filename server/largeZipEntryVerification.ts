@@ -4,7 +4,7 @@ import type {LargeZipEntry} from './largeZipInspection';
 
 // Private validation helper for one ZIP entry. Not wired to public game approval.
 // The per-entry limit is deliberately conservative until streaming-to-R2 is ready.
-const CHUNK=256*1024,MAX_OUTPUT=64*1024*1024;
+const CHUNK=256*1024,MAX_OUTPUT=16*1024*1024;
 const table=new Uint32Array(256);
 for(let n=0;n<256;n++){let c=n;for(let j=0;j<8;j++)c=c&1?0xedb88320^(c>>>1):c>>>1;table[n]=c>>>0}
 function crcUpdate(crc:number,data:Uint8Array){for(let i=0;i<data.length;i++)crc=table[(crc^data[i])&255]^(crc>>>8);return crc>>>0}
