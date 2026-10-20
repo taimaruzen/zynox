@@ -5,9 +5,9 @@ const respond=(data:unknown,status=200)=>new Response(JSON.stringify(data),{stat
 const categories=['アクション','パズル','レース','シューティング','その他'];
 export async function handleGames(req:Request,env:Env,user:User|null):Promise<Response>{
 const path=new URL(req.url).pathname;
-if(path==='/api/games/public'&&req.method==='GET'){const result=await env.DB.prepare("SELECT g.id,g.title,g.description,g.category,g.created_at,u.username,(SELECT COUNT(*) FROM play_sessions p WHERE p.game_id=g.id AND p.counted=1) AS play_count FROM games g JOIN users u ON g.owner_id=u.id WHERE g.status='approved' ORDER BY g.created_at DESC LIMIT 100").all();return respond({games:result.results})}
+if(path==='/api/games/public'&&req.method==='GET'){const result=await env.DB.prepare("SELECT g.id,g.title,g.description,g.category,g.created_at,u.username,CASE WHEN g.thumbnail_key IS NOT NULL THEN 1 ELSE 0 END AS has_thumbnail,(SELECT COUNT(*) FROM play_sessions p WHERE p.game_id=g.id AND p.counted=1) AS play_count FROM games g JOIN users u ON g.owner_id=u.id WHERE g.status='approved' ORDER BY g.created_at DESC LIMIT 100").all();return respond({games:result.results})}
 if(!user)return respond({error:'ログインが必要です'},401);
-if(path==='/api/games/mine'&&req.method==='GET'){const result=await env.DB.prepare('SELECT g.id,g.title,g.description,g.category,g.status,g.created_at,(SELECT COUNT(*) FROM play_sessions p WHERE p.game_id=g.id AND p.counted=1) AS play_count FROM games g WHERE g.owner_id=? ORDER BY created_at DESC LIMIT 100').bind(user.id).all();return respond({games:result.results})}
+if(path==='/api/games/mine'&&req.method==='GET'){const result=await env.DB.prepare('SELECT g.id,g.title,g.description,g.category,g.status,g.created_at,CASE WHEN g.thumbnail_key IS NOT NULL THEN 1 ELSE 0 END AS has_thumbnail,(SELECT COUNT(*) FROM play_sessions p WHERE p.game_id=g.id AND p.counted=1) AS play_count FROM games g WHERE g.owner_id=? ORDER BY created_at DESC LIMIT 100').bind(user.id).all();return respond({games:result.results})}
 if(path!=='/api/games/upload'||req.method!=='POST')return respond({error:'Not found'},404);
 if(req.headers.get('origin')!==new URL(req.url).origin)return respond({error:'Invalid origin'},403);
 const max=10*1024*1024;
